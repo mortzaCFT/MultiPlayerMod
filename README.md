@@ -2,16 +2,10 @@
 Backend for a multiplayer mod for construct 3 without req an dedicated server or WebSocket for communication with users.
 
 
-The hybrid approach of using WebSockets for client-to-client communication and AJAX for server-client communication is a good compromise, given your budget constraints.
-This approach can help you achieve a robust and efficient multiplayer system, with WebSockets handling real-time communication between players and AJAX handling server-side tasks like rewarding users.
+With your budget in mind the hybrid approach of using AJAX for server-client communication and WebSockets for client-to-client communication is a good compromise. This can enable you have a stable and highly efficient multiplayer system, where real-time communications between players are handled by WebSockets while AJAX serves other purposes like user rewards.
 
 
-
-
-
-By using WebSockets for client-to-client communication, you can reduce the load on your server and minimize the need for frequent server-side requests.
-This approach can help you save on server resources and bandwidth, making it a cost-effective solution.
-
+This will reduce your server’s workload since it will be able to easily communicate with clients directly rather than sending requests on behalf of them after the introduction of web sockets.Why this may be an option includes cutting down on server resources and bandwidth consumption hence making it cheaper.
 
 
 
