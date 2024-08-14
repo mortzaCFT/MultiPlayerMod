@@ -1,72 +1,60 @@
 <?php
-include 'config.php';
-include 'sessionOn.php';
-include 'sessionEnd.php';
+require(__DIR__ . '/lib/auth.php');
+require(__DIR__ . '/lib/config.php');
+require(__DIR__ . '/lib/qurey.php');
+require(__DIR__ . '/lib/session.php');
 
-class Session {
-    private $conn;
 
-    public function __construct($conn) {
-        $this->conn = $conn;
-    }
+$conn = new mysqli(DB_HOST, DB_USERNAME, DB_PASSWORD, DB_NAME);
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+//creating a waiting_list table
+createWaitingListTable($conn);
 
-    public function createMatchingTable() {
-        $stmt = $this->conn->prepare('CREATE TABLE IF NOT EXISTS matching (
-            id INT AUTO_INCREMENT,
-            player1_uuid VARCHAR(255) NOT NULL,
-            player2_uuid VARCHAR(255) NOT NULL,
-            player3_uuid VARCHAR(255) NOT NULL,
-            player4_uuid VARCHAR(255) NOT NULL,
-            status VARCHAR(20) NOT NULL DEFAULT "in_progress",
-            PRIMARY KEY (id)
-        )');
-        $stmt->execute();
-    }
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $player_uuid = $_POST['player_uuid'];
+    $player_ping = $_POST['player_ping'];
+    $gamble_amount = $_POST['gamble_amount'];
+    $player_status = $_POST['player_status'];
 
-    public function startSession($player_uuid) {
-        $this->createMatchingTable();
-        $sessionOn = new SessionOn($this->conn);
-        $sessionOn->findPlayers($player_uuid);
-    }
+    // validate user through auth.php
+    $user_data = authenticateUser($conn, $player_uuid);
+    if ($user_data) {
+        $player_name = $user_data['name'];
+        $player_uuid = $user_data['uuid'];
 
-    public function endSession($player_uuid) {
-        $sessionEnd = new SessionEnd($this->conn);
-        $sessionEnd->endGame($player_uuid);
-    }
+        if ($player_status === 'OnStart') {
+            // add player to waiting room
+            addPlayerToWaitingRoom($conn, $player_uuid, $player_name, $gamble_amount, $player_ping);
+            updateLastActivity($conn, $player_uuid);
 
-    public function getGameInfo($player_uuid) {
-        $stmt = $this->conn->prepare('SELECT * FROM matching WHERE player1_uuid = ? OR player2_uuid = ? OR player3_uuid = ? OR player4_uuid = ?');
-        $stmt->bind_param('ssss', $player_uuid, $player_uuid, $player_uuid, $player_uuid);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $gameInfo = array();
-        if ($result->num_rows > 0) {
-            $row = $result->fetch_assoc();
-            $gameInfo['host'] = $row['player1_uuid'];
-            $gameInfo['player1'] = $row['player2_uuid'];
-            $gameInfo['player2'] = $row['player3_uuid'];
-            $gameInfo['player3'] = $row['player4_uuid'];
-        }
-        return $gameInfo;
-    }
+            // start a new session
+            $session = new Session($conn);
+            $session->startSession($player_uuid);
 
-    public function getMatchInfo($player_uuid) {
-        $gameInfo = $this->getGameInfo($player_uuid);
-        if (!empty($gameInfo)) {
-            $stmt = $this->conn->prepare('SELECT id FROM matching WHERE player1_uuid = ? OR player2_uuid = ? OR player3_uuid = ? OR player4_uuid = ?');
-            $stmt->bind_param('ssss', $player_uuid, $player_uuid, $player_uuid, $player_uuid);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            $match_id = null;
-            if ($result->num_rows > 0) {
-                $row = $result->fetch_assoc();
-                $match_id = $row['id'];
+            // get the match info
+            $matchInfo = $session->getMatchInfo($player_uuid);
+            if (!empty($matchInfo)) {
+                echo "success=true&match_info=$matchInfo";
+            } else {
+                echo "success=false&message=No game found";
             }
-            return array('match_id' => $match_id, 'host' => $gameInfo['host'], 'player1' => $gameInfo['player1'], 'player2' => $gameInfo['player2'], 'player3' => $gameInfo['player3']);
+        } elseif ($player_status === 'OnEnd') {
+            echo "success=true&message=Player removed from waiting room";
+        } elseif ($player_status === 'OnCancel') {
+            // remove player from waiting room
+            removePlayerFromWaitingRoom($conn, $player_uuid);
+            echo "success=true&message=Player removed from waiting room";
         } else {
-            return array();
+            echo "success=false&message=Invalid player status";
         }
+    } else {
+        echo "success=false&message=Invalid user";
     }
 }
-//This file controls session using two sessionOn.php and sessionEnd.php.
+
+removeInactivePlayers($conn);
+
+$conn->close();
 ?>
