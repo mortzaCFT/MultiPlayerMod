@@ -1,5 +1,6 @@
 <?php
-//we don't really make connection with sql again
+include 'config.php';
+
 function authenticateUser($conn, $uuid) {
     $stmt = $conn->prepare('SELECT name, uuid FROM game WHERE uuid = ?');
     $stmt->bind_param('s', $uuid);
